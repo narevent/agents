@@ -1,3 +1,8 @@
+# CONFIGURATION
+# PROJECT_NAME: agents
+# PROJECT_DIR: /var/www/agents
+# WSGI_MODULE: agents.wsgi:application
+
 [Unit]
 Description=Gunicorn daemon for agents Django application
 After=network.target
@@ -5,16 +10,11 @@ After=network.target
 [Service]
 User=www-data
 Group=www-data
+UMask=0007
 WorkingDirectory=/var/www/agents
 Environment="PATH=/var/www/agents/venv/bin"
 EnvironmentFile=/var/www/agents/.env
-ExecStart=/var/www/agents/venv/bin/gunicorn \
-    --workers 3 \
-    --bind unix:/var/www/agents/gunicorn.sock \
-    --timeout 60 \
-    --access-logfile /var/www/agents/logs/gunicorn-access.log \
-    --error-logfile /var/www/agents/logs/gunicorn-error.log \
-    agents.wsgi:application
+ExecStart=/var/www/agents/venv/bin/gunicorn     --workers 3     --bind unix:/var/www/agents/gunicorn.sock     --timeout 60     --access-logfile /var/www/agents/logs/gunicorn-access.log     --error-logfile /var/www/agents/logs/gunicorn-error.log     agents.wsgi:application
 
 [Install]
 WantedBy=multi-user.target

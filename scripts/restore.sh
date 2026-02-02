@@ -1,12 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "================================"
-echo "agents Restore Script"
-echo "================================"
+# CONFIGURATION
+PROJECT_NAME="'"${PROJECT_NAME}"'"                                    # Project name
+PROJECT_DIR="'"${PROJECT_DIR_PATH}"'"                            # Project directory
+BACKUP_DIR="'"${BACKUP_DIR_PATH}"'"                         # Backup directory
 
-PROJECT_DIR="/var/www/agents"
-BACKUP_DIR="/var/backups/agents"
+
+SERVICE_NAME="gunicorn-${PROJECT_NAME}"
+
+echo "================================"
+echo "${PROJECT_NAME} Restore Script"
+echo "================================"
 
 # List available backups
 echo "Available backups:"
@@ -33,7 +38,7 @@ fi
 
 # Stop Gunicorn
 echo "Stopping Gunicorn..."
-sudo systemctl stop gunicorn
+sudo systemctl stop ${SERVICE_NAME}
 
 # Extract backup
 echo "Restoring from backup..."
@@ -46,7 +51,7 @@ sudo chown -R www-data:www-data $PROJECT_DIR/media
 
 # Start Gunicorn
 echo "Starting Gunicorn..."
-sudo systemctl start gunicorn
+sudo systemctl start ${SERVICE_NAME}
 
 echo ""
 echo "================================"
@@ -55,3 +60,4 @@ echo "================================"
 echo ""
 echo "Your site has been restored from: $backup_file"
 echo ""
+

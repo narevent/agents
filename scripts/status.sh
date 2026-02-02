@@ -1,7 +1,18 @@
 #!/bin/bash
+set -e
+
+# CONFIGURATION
+PROJECT_NAME="'"${PROJECT_NAME}"'"                                    # Project name
+PROJECT_DIR="'"${PROJECT_DIR_PATH}"'"                            # Project directory
+BACKUP_DIR="'"${BACKUP_DIR_PATH}"'"                         # Backup directory
+
+#!/bin/bash
+
+SITE_URL="https://agents.vetgaaf.tech"                            # Primary site URL
+SERVICE_NAME="gunicorn-${PROJECT_NAME}"
 
 echo "================================"
-echo "agents System Status"
+echo "${PROJECT_NAME} System Status"
 echo "================================"
 echo ""
 
@@ -16,7 +27,7 @@ echo ""
 # Disk Usage
 echo "💾 Disk Usage:"
 df -h / | tail -1 | awk '{printf "  Root: %s / %s (%s used)\n", $3, $2, $5}'
-df -h /var/www/agents 2>/dev/null | tail -1 | awk '{printf "  Project: %s / %s (%s used)\n", $3, $2, $5}' || echo "  Project: N/A"
+df -h $PROJECT_DIR 2>/dev/null | tail -1 | awk '{printf "  Project: %s / %s (%s used)\n", $3, $2, $5}' || echo "  Project: N/A"
 echo ""
 
 # Memory Usage
@@ -26,10 +37,10 @@ echo ""
 
 # Service Status
 echo "🔧 Services:"
-if systemctl is-active --quiet gunicorn; then
-    echo "  ✅ Gunicorn: Running"
+if systemctl is-active --quiet ${SERVICE_NAME}; then
+    echo "  ✅ Gunicorn (${PROJECT_NAME}): Running"
 else
-    echo "  ❌ Gunicorn: Not running"
+    echo "  ❌ Gunicorn (${PROJECT_NAME}): Not running"
 fi
 
 if systemctl is-active --quiet nginx; then
@@ -47,7 +58,8 @@ echo ""
 
 # SSL Certificate
 echo "🔒 SSL Certificate:"
-if sudo certbot certificates 2>/dev/null | grep -q "agents.vetgaaf.tech"; then
+CERT_DOMAIN=$(echo $SITE_URL | sed 's|https://||' | sed 's|http://||' | cut -d'/' -f1)
+if sudo certbot certificates 2>/dev/null | grep -q "$CERT_DOMAIN"; then
     expiry=$(sudo certbot certificates 2>/dev/null | grep "Expiry Date" | head -1 | awk '{print $3, $4}')
     echo "  ✅ Certificate installed"
     echo "  Expires: $expiry"
@@ -58,10 +70,10 @@ echo ""
 
 # Recent Errors
 echo "⚠️  Recent Errors (last 10):"
-error_count=$(sudo journalctl -u gunicorn --since "1 hour ago" -p err --no-pager | wc -l)
+error_count=$(sudo journalctl -u ${SERVICE_NAME} --since "1 hour ago" -p err --no-pager 2>/dev/null | wc -l)
 if [ "$error_count" -gt 0 ]; then
     echo "  Found $error_count error(s) in last hour"
-    sudo journalctl -u gunicorn --since "1 hour ago" -p err --no-pager | tail -5
+    sudo journalctl -u ${SERVICE_NAME} --since "1 hour ago" -p err --no-pager | tail -5
 else
     echo "  No errors in last hour ✅"
 fi
@@ -69,8 +81,8 @@ echo ""
 
 # Database
 echo "🗄️  Database:"
-if [ -f "/var/www/agents/db/db.sqlite3" ]; then
-    db_size=$(du -h /var/www/agents/db/db.sqlite3 | awk '{print $1}')
+if [ -f "$PROJECT_DIR/db/db.sqlite3" ]; then
+    db_size=$(du -h $PROJECT_DIR/db/db.sqlite3 | awk '{print $1}')
     echo "  Size: $db_size"
 else
     echo "  ⚠️  Database not found"
@@ -79,8 +91,8 @@ echo ""
 
 # Last Backup
 echo "💾 Last Backup:"
-if [ -d "/var/backups/agents" ]; then
-    last_backup=$(ls -t /var/backups/agents/full_backup_*.tar.gz 2>/dev/null | head -1)
+if [ -d "$BACKUP_DIR" ]; then
+    last_backup=$(ls -t $BACKUP_DIR/full_backup_*.tar.gz 2>/dev/null | head -1)
     if [ ! -z "$last_backup" ]; then
         backup_date=$(stat -c %y "$last_backup" | cut -d'.' -f1)
         backup_size=$(du -h "$last_backup" | awk '{print $1}')
@@ -96,7 +108,7 @@ echo ""
 
 # Website Check
 echo "🌐 Website Status:"
-response=$(curl -s -o /dev/null -w "%{http_code}" https://agents.vetgaaf.tech 2>/dev/null)
+response=$(curl -s -o /dev/null -w "%{http_code}" $SITE_URL 2>/dev/null)
 if [ "$response" = "200" ]; then
     echo "  ✅ Site is accessible (HTTP $response)"
 else
@@ -107,8 +119,9 @@ echo ""
 echo "================================"
 echo "Quick Commands:"
 echo "================================"
-echo "  Restart services: sudo systemctl restart gunicorn nginx"
+echo "  Restart service: sudo systemctl restart ${SERVICE_NAME} nginx"
 echo "  View logs: bash scripts/logs.sh"
 echo "  Update site: bash scripts/update.sh"
 echo "  Create backup: bash scripts/backup.sh"
 echo ""
+

@@ -1,7 +1,17 @@
 #!/bin/bash
+set -e
+
+# CONFIGURATION
+PROJECT_NAME="'"${PROJECT_NAME}"'"                                    # Project name
+PROJECT_DIR="'"${PROJECT_DIR_PATH}"'"                            # Project directory
+BACKUP_DIR="'"${BACKUP_DIR_PATH}"'"                         # Backup directory
+
+#!/bin/bash
+
+SERVICE_NAME="gunicorn-${PROJECT_NAME}"
 
 echo "================================"
-echo "agents Logs Viewer"
+echo "${PROJECT_NAME} Logs Viewer"
 echo "================================"
 echo ""
 echo "Select which logs to view:"
@@ -17,15 +27,15 @@ read -p "Enter choice [1-6]: " choice
 case $choice in
     1)
         echo "Viewing Gunicorn service logs (Ctrl+C to exit)..."
-        sudo journalctl -u gunicorn -f
+        sudo journalctl -u ${SERVICE_NAME} -f
         ;;
     2)
         echo "Viewing Gunicorn access logs (Ctrl+C to exit)..."
-        sudo tail -f /var/www/agents/logs/gunicorn-access.log
+        sudo tail -f $PROJECT_DIR/logs/gunicorn-access.log
         ;;
     3)
         echo "Viewing Gunicorn error logs (Ctrl+C to exit)..."
-        sudo tail -f /var/www/agents/logs/gunicorn-error.log
+        sudo tail -f $PROJECT_DIR/logs/gunicorn-error.log
         ;;
     4)
         echo "Viewing Nginx access logs (Ctrl+C to exit)..."
@@ -37,10 +47,11 @@ case $choice in
         ;;
     6)
         echo "Viewing all logs (Ctrl+C to exit)..."
-        sudo tail -f /var/www/agents/logs/*.log /var/log/nginx/*.log
+        sudo tail -f $PROJECT_DIR/logs/*.log /var/log/nginx/*.log
         ;;
     *)
         echo "Invalid choice"
         exit 1
         ;;
 esac
+

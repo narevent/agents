@@ -1,13 +1,23 @@
 #!/bin/bash
 set -e
 
-echo "================================"
-echo "agents Django Deployment"
-echo "================================"
+# CONFIGURATION
+PROJECT_NAME="'"${PROJECT_NAME}"'"                                    # Project name
+PROJECT_DIR="'"${PROJECT_DIR_PATH}"'"                            # Project directory
+BACKUP_DIR="'"${BACKUP_DIR_PATH}"'"                         # Backup directory
 
-# Configuration
-PROJECT_DIR="/var/www/agents"
-REPO_URL="https://github.com/narevent/agents.git"
+
+# Additional configuration
+REPO_URL="https://github.com/narevent/agents.git"       # GitHub repository URL
+DOMAIN_NAMES="agents.vetgaaf.tech"               # Space-separated domain names
+PRIMARY_DOMAIN="agents.vetgaaf.tech"                              # Primary domain (first one)
+WSGI_MODULE="agents.wsgi:application"                    # Django WSGI module (usually projectname.wsgi:application)
+
+SERVICE_NAME="gunicorn-${PROJECT_NAME}"
+
+echo "================================"
+echo "${PROJECT_NAME} Django Deployment"
+echo "================================"
 
 # Prompt for repository URL
 echo "Enter your GitHub repository URL"
@@ -67,7 +77,7 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
     
     echo ".env file created with generated secret key"
     echo ""
-    echo "IMPORTANT: Edit /var/www/agents/.env and configure:"
+    echo "IMPORTANT: Edit ${PROJECT_DIR}/.env and configure:"
     echo "  - Email settings (if using email)"
     echo "  - Payment gateway keys (Stripe/PayPal if using)"
     echo "  - Any other sensitive settings"
@@ -100,16 +110,15 @@ fi
 
 # Setup Gunicorn service
 echo "Setting up Gunicorn service..."
-sudo cp $PROJECT_DIR/gunicorn.service /etc/systemd/system/gunicorn.service
+sudo cp $PROJECT_DIR/gunicorn.service /etc/systemd/system/${SERVICE_NAME}.service
 sudo systemctl daemon-reload
-sudo systemctl enable gunicorn
-sudo systemctl restart gunicorn
+sudo systemctl enable ${SERVICE_NAME}
+sudo systemctl restart ${SERVICE_NAME}
 
 # Setup Nginx
 echo "Setting up Nginx..."
-sudo cp $PROJECT_DIR/nginx.conf /etc/nginx/sites-available/agents
-sudo ln -sf /etc/nginx/sites-available/agents /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo cp $PROJECT_DIR/nginx.conf /etc/nginx/sites-available/${PROJECT_NAME}
+sudo ln -sf /etc/nginx/sites-available/${PROJECT_NAME} /etc/nginx/sites-enabled/
 
 # Test Nginx configuration
 echo "Testing Nginx configuration..."
@@ -134,8 +143,14 @@ if [ "$setup_ssl" = "y" ]; then
     echo "Enter your email for Let's Encrypt notifications:"
     read -r email
     
+    # Build certbot command with all domains
+    CERTBOT_DOMAINS=""
+    for domain in $DOMAIN_NAMES; do
+        CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $domain"
+    done
+    
     echo "Setting up SSL certificate..."
-    sudo certbot --nginx -d agents.vetgaaf.tech --non-interactive --agree-tos --email $email --redirect
+    sudo certbot --nginx $CERTBOT_DOMAINS --non-interactive --agree-tos --email $email --redirect
     
     if [ $? -eq 0 ]; then
         echo "SSL certificate installed successfully!"
@@ -144,11 +159,15 @@ if [ "$setup_ssl" = "y" ]; then
         sudo systemctl start certbot.timer
     else
         echo "SSL setup failed. You can try again later with:"
-        echo "sudo certbot --nginx -d agents.vetgaaf.tech"
+        echo "sudo certbot --nginx $CERTBOT_DOMAINS"
     fi
 else
     echo "Skipping SSL setup. You can run it later with:"
-    echo "sudo certbot --nginx -d agents.vetgaaf.tech"
+    CERTBOT_DOMAINS=""
+    for domain in $DOMAIN_NAMES; do
+        CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $domain"
+    done
+    echo "sudo certbot --nginx $CERTBOT_DOMAINS"
 fi
 
 echo ""
@@ -157,21 +176,21 @@ echo "Deployment Complete!"
 echo "================================"
 echo ""
 echo "Service status:"
-sudo systemctl status gunicorn --no-pager | head -5
+sudo systemctl status ${SERVICE_NAME} --no-pager | head -5
 echo ""
 echo "Your site should now be accessible at:"
 if [ "$setup_ssl" = "y" ]; then
-    echo "  https://agents.vetgaaf.tech"
-    echo "  Admin panel: https://agents.vetgaaf.tech/admin/"
+    echo "  https://${PRIMARY_DOMAIN}"
+    echo "  Admin panel: https://${PRIMARY_DOMAIN}/admin/"
 else
-    echo "  http://example.com (HTTP only - setup SSL for HTTPS)"
-    echo "  Admin panel: http://agents.vetgaaf.tech/admin/"
+    echo "  http://${PRIMARY_DOMAIN} (HTTP only - setup SSL for HTTPS)"
+    echo "  Admin panel: http://${PRIMARY_DOMAIN}/admin/"
 fi
 echo ""
 echo "Useful commands:"
-echo "  View Gunicorn logs: sudo journalctl -u gunicorn -f"
+echo "  View Gunicorn logs: sudo journalctl -u ${SERVICE_NAME} -f"
 echo "  View Nginx logs: sudo tail -f /var/log/nginx/error.log"
-echo "  Restart services: sudo systemctl restart gunicorn nginx"
+echo "  Restart services: sudo systemctl restart ${SERVICE_NAME} nginx"
 echo "  Update site: bash scripts/update.sh"
 echo ""
 echo "Don't forget to:"
@@ -179,3 +198,4 @@ echo "  - Configure email settings in .env"
 echo "  - Configure payment gateways in .env (if needed)"
 echo "  - Upload media files if migrating from another server"
 echo ""
+

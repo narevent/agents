@@ -1,13 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "================================"
-echo "agents Backup Script"
-echo "================================"
+# CONFIGURATION
+PROJECT_NAME="'"${PROJECT_NAME}"'"                                    # Project name
+PROJECT_DIR="'"${PROJECT_DIR_PATH}"'"                            # Project directory
+BACKUP_DIR="'"${BACKUP_DIR_PATH}"'"                         # Backup directory
 
-PROJECT_DIR="/var/www/agents"
-BACKUP_DIR="/var/backups/agents"
+
 DATE=$(date +%Y%m%d_%H%M%S)
+
+echo "================================"
+echo "${PROJECT_NAME} Backup Script"
+echo "================================"
 
 # Create backup directory
 sudo mkdir -p $BACKUP_DIR
@@ -48,4 +52,4 @@ sudo ls -lh $BACKUP_DIR/
 echo ""
 echo "Backup complete!"
 echo "Backup location: $BACKUP_DIR"
-echo ""
+echo "
