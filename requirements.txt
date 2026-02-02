@@ -7,3 +7,4 @@ PyOpenSSL==25.1.0
 django-extensions==4.1
 django-sslserver==0.22
 gunicorn==21.2.0
+g4f==7.0.0
