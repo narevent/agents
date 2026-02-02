@@ -1,0 +1,490 @@
+{% extends "chat/base.html" %}
+
+{% block title %}Chat{% endblock %}
+
+{% block content %}
+<div class="flex h-screen bg-gray-50">
+    <!-- Sidebar -->
+    <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
+        <!-- Logo/Header -->
+        <div class="p-6 border-b border-gray-200">
+            <a href="{% url 'home' %}" class="text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
+                ← AI Agents
+            </a>
+        </div>
+        
+        <!-- New Chat Button -->
+        <div class="p-4 border-b border-gray-200">
+            <button onclick="newChat()" class="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-all">
+                + New Chat
+            </button>
+        </div>
+        
+        <!-- Agent Selection -->
+        <div class="flex-1 overflow-y-auto chat-scroll p-4">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">Select Agent</h3>
+            {% for category, agents in categories.items %}
+            <div class="mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-2 px-2">{{ category }}</h4>
+                <div class="space-y-1">
+                    {% for agent in agents %}
+                        <div class="agent-select p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all {% if selected_agent and selected_agent.id == agent.id %}bg-blue-50 border-l-4 border-blue-500{% endif %}" 
+                            onclick="selectAgent({{ agent.id }}, '{{ agent.name|escapejs }}', '{{ agent.get_icon|escapejs }}')">
+                            <div class="flex items-center gap-3">
+                                <div class="text-xl">{{ agent.get_icon }}</div>
+                                <div class="flex-1 min-w-0">
+                                    <h5 class="font-medium text-sm text-gray-900 truncate">{{ agent.name }}</h5>
+                                    <p class="text-xs text-gray-500 truncate">{{ agent.category }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Recent Conversations -->
+        <div class="border-t border-gray-200 p-4 max-h-64 overflow-y-auto chat-scroll">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">Recent</h3>
+            <div class="space-y-1">
+                {% for conv in conversations %}
+                <div class="p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all {% if conversation and conversation.id == conv.id %}bg-gray-100{% endif %}" 
+                     onclick="location.href='{% url 'conversation_detail' conv.id %}'">
+                    <div class="flex items-start gap-2">
+                        <span class="text-lg">{{ conv.agent.icon }}</span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-900 truncate">{{ conv.title }}</p>
+                            <p class="text-xs text-gray-500">{{ conv.updated_at|timesince }} ago</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col bg-white">
+        <!-- Chat Header -->
+        <div class="bg-white border-b border-gray-200 p-6">
+            <div id="chat-header" class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div id="agent-icon" class="w-14 h-14 rounded-xl bg-blue-500 flex items-center justify-center text-2xl text-white">
+                        {% if selected_agent %}{{ selected_agent.get_icon }}{% else %}💬{% endif %}
+                    </div>
+                    <div>
+                        <h2 id="agent-name" class="text-xl font-semibold text-gray-900">
+                            {% if selected_agent %}{{ selected_agent.name }}{% else %}Select an Agent{% endif %}
+                        </h2>
+                        <div class="flex items-center gap-3 mt-1">
+                            {% if selected_agent %}
+                            <p id="agent-category" class="text-sm text-gray-500">{{ selected_agent.category }}</p>
+                            <span class="text-gray-300">•</span>
+                            <a href="{% url 'view_system_prompt' selected_agent.id %}" 
+                            class="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                            id="system-prompt-link">
+                                View System Prompt
+                            </a>
+                            {% else %}
+                            <p id="agent-category" class="text-sm text-gray-500">Choose an agent to start chatting</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% if conversation %}
+                <button onclick="deleteConversation({{ conversation.id }})" 
+                        class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                        title="Delete conversation">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Messages Area -->
+        <div id="messages" class="flex-1 overflow-y-auto chat-scroll p-6">
+            {% if messages %}
+                <div class="max-w-4xl mx-auto space-y-6">
+                    {% for message in messages %}
+                    <div class="flex gap-4 {% if message.role == 'user' %}flex-row-reverse{% endif %}">
+                        <div class="w-10 h-10 rounded-xl {% if message.role == 'user' %}bg-gray-900{% else %}color-{{ selected_agent.color }}{% endif %} flex items-center justify-center text-white font-medium flex-shrink-0">
+                            {% if message.role == 'user' %}
+                                {{ request.user.username.0|upper }}
+                            {% else %}
+                                {{ selected_agent.icon }}
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 {% if message.role == 'user' %}text-right{% endif %}">
+                            <div class="inline-block max-w-3xl text-left">
+                                <div class="{% if message.role == 'user' %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-900{% endif %} rounded-2xl px-6 py-4">
+                                    <div class="markdown-content text-sm leading-relaxed whitespace-pre-wrap">{{ message.content|safe }}</div>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-2 px-2">{{ message.created_at|date:"H:i" }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+            <div class="flex items-center justify-center h-full">
+                <div class="text-center text-gray-400 max-w-md">
+                    <svg class="w-20 h-20 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Start a conversation</h3>
+                    <p class="text-sm">{% if selected_agent %}Send a message to begin chatting with {{ selected_agent.name }}{% else %}Select an agent and send a message to begin{% endif %}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Input Area -->
+        <div class="border-t border-gray-200 p-6 bg-gray-50">
+            <form id="chat-form" class="max-w-4xl mx-auto" onsubmit="sendMessage(event)">
+                <div class="flex gap-3">
+                    <input 
+                        type="text" 
+                        id="message-input" 
+                        placeholder="Type your message..." 
+                        class="flex-1 px-6 py-4 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                    />
+                    <button 
+                        type="submit" 
+                        class="px-8 py-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        id="send-button"
+                    >
+                        <span>Send</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedAgentId = {% if selected_agent %}{{ selected_agent.id }}{% else %}null{% endif %};
+let selectedAgentColor = {% if selected_agent %}'{{ selected_agent.color }}'{% else %}'blue'{% endif %};
+let currentConversationId = {% if conversation %}{{ conversation.id }}{% else %}null{% endif %};
+
+function selectAgent(agentId, agentName, agentIcon) {
+    selectedAgentId = agentId;
+    
+    // Update the header
+    document.getElementById('agent-name').textContent = agentName;
+    document.getElementById('agent-category').textContent = 'Ready to chat';
+    
+    // Update agent icon
+    const iconEl = document.getElementById('agent-icon');
+    iconEl.textContent = agentIcon;
+    
+    // Create or update the system prompt link
+    let promptLink = document.getElementById('system-prompt-link');
+    if (!promptLink) {
+        const categoryDiv = document.getElementById('agent-category').parentElement;
+        promptLink = document.createElement('a');
+        promptLink.id = 'system-prompt-link';
+        promptLink.className = 'text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors';
+        promptLink.href = `/agent/system-prompt/${agentId}/`;
+        promptLink.textContent = 'View System Prompt';
+        
+        // Add separator and link
+        const separator = document.createElement('span');
+        separator.className = 'text-gray-300';
+        separator.textContent = '•';
+        
+        categoryDiv.appendChild(separator);
+        categoryDiv.appendChild(promptLink);
+    } else {
+        promptLink.href = `/agent/system-prompt/${agentId}/`;
+    }
+    
+    // Update the empty state message
+    if (!currentConversationId) {
+        document.getElementById('messages').innerHTML = `
+            <div class="flex items-center justify-center h-full">
+                <div class="text-center text-gray-400 max-w-md">
+                    <svg class="w-20 h-20 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Start a conversation with ${agentName}</h3>
+                    <p class="text-sm mb-4">Send a message to begin chatting</p>
+                    <a href="/agent/system-prompt/${agentId}/" class="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        View System Prompt to see what this agent can do
+                    </a>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function newChat() {
+    currentConversationId = null;
+    location.href = '{% url "chat_home" %}';
+}
+
+async function deleteConversation(convId) {
+    if (!confirm('Delete this conversation?')) return;
+    
+    try {
+        const response = await fetch(`/api/delete/${convId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (response.ok) {
+            location.href = '{% url "chat_home" %}';
+        }
+    } catch (error) {
+        alert('Error deleting conversation');
+    }
+}
+
+async function sendMessage(event) {
+    event.preventDefault();
+    
+    if (!selectedAgentId) {
+        alert('Please select an agent first');
+        return;
+    }
+    
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    const sendButton = document.getElementById('send-button');
+    sendButton.disabled = true;
+    
+    addMessageToUI('user', message);
+    input.value = '';
+    
+    showTypingIndicator();
+    
+    try {
+        const response = await fetch('{% url "send_message" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                agent_id: selectedAgentId,
+                message: message,
+                conversation_id: currentConversationId
+            })
+        });
+        
+        const data = await response.json();
+        
+        removeTypingIndicator();
+        
+        if (data.success) {
+            currentConversationId = data.conversation_id;
+            addMessageToUI('assistant', data.response);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        removeTypingIndicator();
+        alert('Error sending message: ' + error);
+    } finally {
+        sendButton.disabled = false;
+    }
+}
+
+function addMessageToUI(role, content) {
+    const messagesDiv = document.getElementById('messages');
+    
+    if (messagesDiv.querySelector('.text-center')) {
+        messagesDiv.innerHTML = '<div class="max-w-4xl mx-auto space-y-6"></div>';
+    }
+    
+    const container = messagesDiv.querySelector('.space-y-6') || messagesDiv;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex gap-4 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+    
+    const now = new Date();
+    const time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    
+    const avatar = role === 'user' ? '{{ request.user.username.0|upper }}' : 
+        document.getElementById('agent-icon').textContent;
+    
+    // Render markdown content
+    const renderedContent = renderMarkdown(content);
+    
+    messageDiv.innerHTML = `
+        <div class="w-10 h-10 rounded-xl ${role === 'user' ? 'bg-gray-900' : 'bg-blue-500'} flex items-center justify-center text-white font-medium flex-shrink-0">
+            ${avatar}
+        </div>
+        <div class="flex-1 ${role === 'user' ? 'text-right' : ''}">
+            <div class="inline-block max-w-3xl text-left">
+                <div class="${role === 'user' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'} rounded-2xl px-6 py-4 message-content relative">
+                    <div class="markdown-content text-sm leading-relaxed">${renderedContent}</div>
+                </div>
+                <div class="text-xs text-gray-400 mt-2 px-2">${time}</div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    
+    // Initialize copy buttons for code blocks
+    initCopyButtons(messageDiv);
+    
+    // Highlight code blocks
+    messageDiv.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+    
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function renderMarkdown(content) {
+    // Process code blocks first to preserve them
+    let processedContent = content;
+    
+    // Replace code blocks with placeholders
+    const codeBlocks = [];
+    processedContent = processedContent.replace(/```([\s\S]*?)```/g, (match, code) => {
+        const id = 'code-' + Math.random().toString(36).substr(2, 9);
+        codeBlocks.push({ id, code });
+        return `\n\n<pre><code class="hljs" id="${id}">${escapeHtml(code.trim())}</code></pre>\n\n`;
+    });
+    
+    // Replace inline code
+    processedContent = processedContent.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Convert to markdown
+    let html = marked.parse(processedContent);
+    
+    // Restore code blocks with copy buttons
+    codeBlocks.forEach(({ id, code }) => {
+        const escapedCode = escapeHtml(code.trim());
+        const codeBlockHTML = `
+            <div class="code-block-wrapper relative">
+                <div class="absolute top-2 right-2 z-10">
+                    <button onclick="copyCode('${id}')" class="copy-btn bg-gray-800 hover:bg-gray-700 text-white p-1.5 rounded-md transition-all" title="Copy code">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <pre><code class="hljs" id="${id}">${escapedCode}</code></pre>
+            </div>
+        `;
+        html = html.replace(`<pre><code class="hljs" id="${id}">${escapedCode}</code></pre>`, codeBlockHTML);
+    });
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function initCopyButtons(container) {
+    container.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.style.opacity = '0';
+        btn.addEventListener('mouseenter', () => {
+            btn.style.opacity = '1';
+        });
+        btn.addEventListener('mouseleave', () => {
+            if (!btn.classList.contains('copied')) {
+                btn.style.opacity = '0';
+            }
+        });
+    });
+}
+
+function copyCode(elementId) {
+    const codeElement = document.getElementById(elementId);
+    const code = codeElement.textContent;
+    const button = event.target.closest('button');
+    
+    navigator.clipboard.writeText(code).then(() => {
+        const originalHTML = button.innerHTML;
+        button.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        `;
+        button.classList.add('copied', 'bg-green-600', 'hover:bg-green-700');
+        button.style.opacity = '1';
+        
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+            button.classList.remove('copied', 'bg-green-600', 'hover:bg-green-700');
+            button.style.opacity = '0';
+        }, 2000);
+    });
+}
+
+function showTypingIndicator() {
+    const messagesDiv = document.getElementById('messages');
+    const container = messagesDiv.querySelector('.space-y-6') || messagesDiv;
+    
+    const typingDiv = document.createElement('div');
+    typingDiv.id = 'typing-indicator';
+    typingDiv.className = 'flex gap-4';
+    
+    const avatar = document.getElementById('agent-icon').textContent;
+    
+    typingDiv.innerHTML = `
+        <div class="w-10 h-10 rounded-xl color-${selectedAgentColor} flex items-center justify-center text-white font-medium flex-shrink-0">
+            ${avatar}
+        </div>
+        <div class="flex-1">
+            <div class="inline-block">
+                <div class="bg-gray-100 rounded-2xl px-6 py-4">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(typingDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Process existing messages to render markdown
+    document.querySelectorAll('.markdown-content').forEach(element => {
+        const content = element.textContent;
+        element.innerHTML = renderMarkdown(content);
+        
+        // Highlight code blocks
+        element.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+        
+        // Initialize copy buttons
+        initCopyButtons(element.closest('.message-content') || element);
+    });
+});
+</script>
+{% endblock %}
